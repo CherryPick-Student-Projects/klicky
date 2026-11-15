@@ -39,7 +39,7 @@ The current repository adds and maintains:
 
 ## Sound recordings
 
-The bundled recordings and timing maps are owned by Muneer Alam and Sauhard Gupta and distributed under the repository MIT License. See [`sounds/LICENSE.md`](sounds/LICENSE.md).
+The bundled recordings and timing maps are distributed under the repository MIT License. See [`sounds/LICENSE.md`](sounds/LICENSE.md).
 
 Contributors adding or replacing sounds must provide a clear source and redistribution permission.
 
