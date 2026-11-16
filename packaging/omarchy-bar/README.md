@@ -1,14 +1,44 @@
 # Klicky Bar
 
-Klicky's sound controls in the Omarchy bar: pause and resume, sound packs, volume, engine start/stop and start at login. Left-click or right-click the keyboard icon to open the controls. Escape or a click outside closes them. The popup supports keyboard focus with Tab.
+Klicky's sound controls in the Omarchy bar: pause and resume, sound packs, volume, engine start/stop and start at login. Left-click or right-click the keyboard icon to open the controls. Escape or a click outside closes them. The popup supports keyboard focus with Tab and follows your Omarchy theme.
+
+On first setup, choose **Left side**, **Right side**, **Left of clock** or **Right of clock**. Left side places Klicky after the existing left-side widgets, such as workspaces; Right side places it before the existing right-side widgets. On a vertical bar these are **Upper side** and **Lower side**. Klicky remembers the choice in your normal bar configuration. **Move in bar** opens the choices again later. The positions beside the clock use Omarchy's adjacent sections so the clock stays centered. Changing position preserves the other widgets and Klicky's executable setting; it never starts or stops playback.
 
 ## Requirements
 
-- Omarchy 4/Quattro with its Quickshell bar and native plugin support.
+- Omarchy 4.5/Quattro with its Quickshell bar and native plugin support.
 - The Klicky engine with `klicky status --json` schema 1, `pause`, `resume` and `service autostart` commands, plus its user systemd service.
-- GNU coreutils (`timeout`), included in Omarchy.
+- Bash, GNU coreutils (`timeout`) and util-linux (`flock`), included in Omarchy.
 
 The published Klicky v0.5.0 does **not** provide these Unix control APIs. This plugin is a development candidate until a compatible engine release and desktop validation are complete. Installing the plugin does not install the engine, change input permissions or enable playback automatically.
+
+## Installation
+
+After the compatible engine and plugin repository are published, install Klicky first using its [Linux installation guide](https://github.com/Muneer320/klicky/blob/master/docs/INSTALLATION.md#linux). If using the one-line installer, pass `--no-omarchy-toggle` to skip the older bar toggle.
+
+If the older toggle is already installed, back up `~/.config/omarchy/shell.json`, then remove only entries with `"id": "klicky"` from its `bar.layout` sections. Keep the other widgets and engine settings. Do not run the full Klicky uninstaller to replace a bar control.
+
+Check that `klicky status --json` works, then add the new bar controls:
+
+```sh
+omarchy plugin add https://github.com/Muneer320/klicky-omarchy-bar --enable
+```
+
+Choose a position when prompted. Open the keyboard icon to start the engine, pick a sound pack, change volume or pause playback. **Start at login** is optional and independent of whether the engine is running now.
+
+Update the plugin with:
+
+```sh
+omarchy plugin update io.github.muneer320.klicky-bar
+```
+
+Remove just the bar controls with:
+
+```sh
+omarchy plugin remove io.github.muneer320.klicky-bar
+```
+
+Removal keeps Klicky itself, its service and your sound settings. See [Klicky's uninstall guide](https://github.com/Muneer320/klicky/blob/master/docs/INSTALLATION.md#uninstall) to remove the engine too.
 
 ## Controls
 
@@ -17,6 +47,8 @@ Pause preserves the running engine; Stop engine shuts it down. Start at login ch
 Audio uses Klicky's current system-default output. Device selection is a separate planned feature; this widget never changes the system-wide audio device.
 
 The widget launches no shell command strings, captures no keyboard events and makes no network requests. Commands run asynchronously with deadlines. Status refreshes every ten seconds, or every two seconds while the popup is open.
+
+Placement uses the native `omarchy bar move` command, then saves the choice with `omarchy bar set`. A bounded helper completes both steps even when moving recreates the widget. The setup prompt returns only if its saved `placement` setting is removed. The included English catalog falls back to English for other Omarchy languages; additional translations can be added under `i18n/`.
 
 ## Development and publication
 
