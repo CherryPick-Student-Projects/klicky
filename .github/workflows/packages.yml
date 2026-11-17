@@ -26,7 +26,7 @@ jobs:
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
         run: test "$SCOPE_RESULT" = success
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -66,8 +66,8 @@ jobs:
         env:
           PACKAGE_RESULT: ${{ needs.debian-package.result }}
         run: test "$PACKAGE_RESULT" = success
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: klicky-debian-amd64
           path: dist
@@ -97,7 +97,7 @@ jobs:
         run: test "$SCOPE_RESULT" = success
       - name: Install dependencies
         run: pacman -Syu --noconfirm base-devel git rust alsa-lib systemd namcap python
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Prepare unprivileged builder
         run: |
           useradd -m builder
