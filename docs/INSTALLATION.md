@@ -4,7 +4,7 @@
 
 ## Centralized update command
 
-The updater is included in current source and will ship in the next app release. For v0.6.1 and earlier, use the installation-specific update steps below.
+Available from v0.7.0. On v0.6.1 or earlier, use your original installer or package manager once to get the updater.
 
 ```sh
 klicky update --check
@@ -20,7 +20,7 @@ klicky update
 - **Scoop (per-user):** opens a terminal, stops a running copy, refreshes Scoop and updates Klicky. A running/paused copy is restarted in its previous playback state; a stopped copy stays stopped.
 - **Homebrew:** updates the tap and formula. A previously running engine and menu helper are restarted; the engine's paused state is restored. Login-startup preferences are not enabled by the updater.
 - **APT:** refreshes repository metadata and upgrades the installed `klicky` package. It may request `sudo` approval.
-- **pacman:** offers a full `pacman -Syu` system upgrade, rather than a partial upgrade. Review pacman's transaction before accepting it.
+- **pacman:** offers a full `pacman -Syu` system upgrade for packages available in configured repositories. It does not download newer GitHub release packages. If you installed Klicky with `pacman -U`, download the newer release package and install it with `sudo pacman -U` again. Review pacman's transaction before accepting it.
 - **Source, portable, global Scoop or unknown copies:** shows manual guidance instead of guessing an installation method or replacing files.
 
 Package-manager versions can arrive later than the GitHub release. A successful check is not proof that your manager already offers that version, and a Windows terminal handoff is not confirmation that installation completed. Use `klicky --version` in a new terminal afterward. The standalone Windows CLI currently requires its full path unless you have added it to PATH.
@@ -47,7 +47,7 @@ For the standalone installer, run in PowerShell:
 irm https://klicky.muneer320.tech/install.ps1 | iex
 ```
 
-The helper downloads and verifies the published installer, opens setup and starts the installed app. For a file download instead, use the [Windows installer](https://github.com/Muneer320/klicky/releases/download/v0.6.1/klicky-0.6.1-windows-x64-setup.exe).
+The helper downloads and verifies the published installer, opens setup and starts the installed app. For a file download instead, use the [Windows installer](https://github.com/Muneer320/klicky/releases/download/v0.7.0/klicky-0.7.0-windows-x64-setup.exe).
 
 Follow the wizard, choose your login-startup preference, then open Klicky from Start. Choose **Resume** from the tray menu to hear sounds. Rust, Visual Studio and separate sound downloads are not needed. The Windows installer and executables are unsigned.
 
@@ -171,12 +171,12 @@ Copy the command for your distribution. These download the package directly, wit
 ```bash
 # Ubuntu / Debian
 curl -fL --retry 2 -o klicky.deb \
-  https://klicky.muneer320.tech/pool/main/k/klicky/klicky_0.6.1-1_amd64.deb
+  https://klicky.muneer320.tech/pool/main/k/klicky/klicky_0.7.0-1_amd64.deb
 sudo apt install ./klicky.deb
 
 # Arch / Omarchy
 curl -fL --retry 2 -o klicky.pkg.tar.zst \
-  https://github.com/Muneer320/klicky/releases/download/v0.6.1/klicky-0.6.1-1-x86_64.pkg.tar.zst
+  https://github.com/Muneer320/klicky/releases/download/v0.7.0/klicky-0.7.0-1-x86_64.pkg.tar.zst
 sudo pacman -U ./klicky.pkg.tar.zst
 ```
 
