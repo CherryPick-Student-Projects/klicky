@@ -258,6 +258,7 @@ struct State {
     packs: Option<Worker>,
     active: Option<Active>,
     config: Config,
+    config_loaded: bool,
     pack: Option<SoundPack>,
     paused: bool,
     recovering: bool,
@@ -296,6 +297,7 @@ impl State {
             packs: None,
             active: None,
             config: Config::default(),
+            config_loaded: false,
             pack: None,
             recovering: false,
             desktop_epoch: 0,
@@ -542,6 +544,22 @@ impl State {
                 && Instant::now() < active.deadline;
             match completion.result {
                 Ok(mut prepared) if activate => {
+                    self.config_loaded = true;
+                    if let Err(error) = prepared.config.audio_output.require_system_default() {
+                        self.config = prepared.config;
+                        self.clear_output();
+                        if let Some(pack) = self.pack.take() {
+                            self.retire_pack(pack);
+                        }
+                        if let Some(pack) = prepared.pack.take() {
+                            self.retire_pack(pack);
+                        }
+                        self.startup_error = Some(format!("{error:#}"));
+                        if let Some(pending) = active.pending {
+                            pending.respond(failure(ErrorCode::Unavailable, &error.to_string()));
+                        }
+                        return;
+                    }
                     match completion.change {
                         Change::Bootstrap | Change::Switch(_) => {
                             if let Some(output) = &self.output {
@@ -559,6 +577,19 @@ impl State {
                                 }
                             }
                         }
+                        Change::FollowDefault => {
+                            self.config.audio_output = prepared.config.audio_output;
+                            if self.pack.is_none() {
+                                if let Err(error) = self.retry() {
+                                    let message = format!("System-default preference saved, but recovery could not start: {error:#}");
+                                    self.last_error = Some(message.clone());
+                                    if let Some(pending) = active.pending {
+                                        pending.respond(failure(ErrorCode::Unavailable, &message));
+                                    }
+                                    return;
+                                }
+                            }
+                        }
                         Change::Volume(_) => {
                             self.config.volume = prepared.config.volume;
                             if let Some(pack) = prepared.pack.take() {
@@ -568,7 +599,12 @@ impl State {
                     }
                     self.last_error = None;
                     if let Some(pending) = active.pending {
-                        pending.respond(self.success());
+                        let outcome = if matches!(pending.request.command, Command::Audio { .. }) {
+                            self.audio_reply()
+                        } else {
+                            self.success()
+                        };
+                        pending.respond(outcome);
                     }
                 }
                 Ok(mut prepared) => {
@@ -652,6 +688,43 @@ impl State {
             volume: self.config.volume,
         }
     }
+    fn audio_status(&self) -> crate::audio::AudioStatus {
+        use crate::audio::{AudioStatus, Availability, Backend, OutputDevice};
+        let output = self.output.as_ref().filter(|output| {
+            self.config_loaded && self.config.audio_output.is_default() && output.is_available()
+        });
+        AudioStatus {
+            schema_version: 1,
+            requested: self.config_loaded.then(|| self.config.audio_output.clone()),
+            active: output.map(|output| OutputDevice {
+                backend: Backend::Wasapi,
+                id: output.id.clone(),
+                name: None,
+            }),
+            availability: if output.is_some() {
+                Availability::Available
+            } else if self.stopping.is_some() || !self.shared.desktop_active.load(Ordering::Acquire)
+            {
+                Availability::Inactive
+            } else if !self.config_loaded && self.startup_error.is_none() {
+                Availability::Initializing
+            } else if self.recovering {
+                Availability::Recovering
+            } else {
+                Availability::Unavailable
+            },
+            manual_paused: self.paused,
+            can_select: false,
+            can_enumerate: false,
+            can_retry: true,
+        }
+    }
+    fn audio_reply(&self) -> Outcome {
+        Outcome::Audio {
+            audio: self.audio_status(),
+        }
+    }
+
     fn success(&self) -> Outcome {
         Outcome::Success {
             snapshot: self.snapshot(),
@@ -734,6 +807,36 @@ impl State {
             return;
         }
         match command {
+            Command::Audio { command } => {
+                use crate::audio::AudioCommand;
+                match command {
+                    AudioCommand::Status => {
+                        pending.respond(self.audio_reply());
+                    }
+                    AudioCommand::FollowDefault => {
+                        let deadline = pending.deadline;
+                        if let Err(error) =
+                            self.submit(Change::FollowDefault, Some(pending), deadline)
+                        {
+                            self.last_error = Some(format!("{error:#}"));
+                        }
+                    }
+                    AudioCommand::Retry => match self.retry() {
+                        Ok(()) => {
+                            pending.respond(self.audio_reply());
+                        }
+                        Err(error) => {
+                            pending.respond(failure(ErrorCode::Unavailable, &format!("{error:#}")));
+                        }
+                    },
+                    _ => {
+                        pending.respond(failure(
+                            ErrorCode::Unavailable,
+                            &crate::audio::unsupported_selection().to_string(),
+                        ));
+                    }
+                }
+            }
             Command::Pause { paused } => {
                 self.paused = paused;
                 self.sync_capture();
@@ -811,7 +914,11 @@ impl State {
     }
 
     fn retry(&mut self) -> Result<()> {
-        if !self.input_ready {
+        // Input initialization may still be pending. Recovery can load the pack
+        // and reopen audio now; sync_capture waits for actual input readiness.
+        if !self.input_ready
+            && (self.fault.is_some() || self.input.as_ref().is_none_or(Input::has_exited))
+        {
             bail!("keyboard input is unavailable; quit and restart Klicky");
         }
         self.last_error = None;
