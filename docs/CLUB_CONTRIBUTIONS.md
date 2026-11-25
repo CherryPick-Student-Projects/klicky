@@ -33,11 +33,13 @@ someone else to avoid two people independently implementing the same change.
 1. Create a feature branch and open a PR against the club fork.
 2. Review it and pass the relevant checks. All merges remain manual.
 3. The original repository's sync workflow notices incoming club commits and
-   opens or refreshes one integration PR from `codex/sync-cherrypick` to `master`.
+   opens one integration PR from `CherryPick-Student-Projects/klicky:master`
+   to `Muneer320/klicky:master`.
 4. Review that PR and use **Create a merge commit**. Do not squash or rebase an
    integration PR: the repositories need shared commit ancestry.
-5. The same workflow proposes incoming upstream changes to the fork through
-   `codex/sync-upstream`. Review and merge that PR with a merge commit too.
+5. The same workflow proposes incoming upstream changes from
+   `Muneer320/klicky:master` to the fork's `master`. Review and merge that PR with
+   a merge commit too.
 
 Feature PRs can still use the normal squash-merge convention. The merge-commit
 requirement applies to repository integration PRs, preserving feature authors and
@@ -48,17 +50,17 @@ pushes to `master`, roughly every six hours, and on manual dispatch. The schedul
 is best effort; GitHub may delay it. Incoming changes are
 fetched as Git objects and never checked out or executed by the sync job. Only
 the two configured repositories and their `master` branches are eligible. The
-job writes a reserved sync branch in its destination repository, opens a PR, and never
-merges, pushes default branches, force-pushes, copies tags or publishes anything.
+job opens a cross-repository PR and never pushes a branch, merges, force-pushes,
+copies tags or publishes anything. The head stays in its source repository so
+unreviewed fork workflows do not gain same-repository access to upstream secrets.
 
-Equal file trees produce no new PR, even when merge commits differ. An existing
-sync PR is still refreshed if the source reverts its changes, so it cannot retain
-an obsolete patch. Repeated checks refresh the same open PR. Closing a sync PR without merging suppresses another
-proposal for the same source revision; later source revisions can be proposed.
-If the sync branch diverges or source history is rewritten, the workflow stops
-without overwriting either history. Resolve conflicts through a reviewed change;
-do not force-push a default branch or squash an integration PR to hide conflicts.
-Do not use the reserved sync branches for unrelated work.
+Equal file trees produce no new PR, even when merge commits differ. GitHub keeps
+an existing PR's head current as the source branch advances, including reversions.
+Repeated checks reuse that open PR. Closing a sync PR without merging suppresses
+another proposal for the same source revision; later source revisions can be
+proposed. Resolve conflicts through a reviewed change on the source side or a
+separate integration PR. Keep force pushes disabled on both default branches and
+do not squash an integration PR to hide conflicts.
 
 ## Automation setup
 
@@ -66,26 +68,27 @@ Review and merge the setup PR in **both** repositories using merge commits.
 Before activation, confirm that both default branches require PRs and passing CI,
 and that merge commits are allowed. Keep the default Actions token read-only and
 the Actions setting for creating/approving PRs unchanged. The automation uses a
-dedicated GitHub App instead: the built-in token cannot push workflow-file
-changes and would eventually stall repository sync.
+dedicated GitHub App to open PRs without enabling that combined setting. It never
+copies workflow files into local branches or needs permission to write them.
 
 Install the dedicated sync App on **only** `Muneer320/klicky` and
-`CherryPick-Student-Projects/klicky`, with repository **Contents**, **Pull requests**
-and **Workflows** set to read/write, plus mandatory Metadata read access. Grant no
+`CherryPick-Student-Projects/klicky`, with repository **Pull requests** set to
+read/write, plus mandatory Metadata read access. Grant no Contents, Workflows,
 organization, administration, secrets, member, issue or project permissions. The
 club organization administrator may need to approve its installation. Do not add
-the App to branch-protection bypass lists or give it release credentials. Its
-Contents permission also permits release API writes; the reviewed workflow never
-uses those APIs, so protect its key and review workflow edits carefully.
+the App to branch-protection bypass lists or give it release credentials. GitHub
+combines PR creation, editing and review in this permission; protect the key and
+review automation changes carefully. The script uses only list/create PR APIs.
 
 Store the App's client ID as the `CLUB_SYNC_CLIENT_ID` Actions variable and its
 private key as the `CLUB_SYNC_PRIVATE_KEY` Actions secret **only in the original
 repository**. No secret belongs in the fork or a source file. Each matrix job
 mints a short-lived token restricted to its destination's single `klicky`
-repository; the official token action revokes it after the job. It never approves
-or merges PRs. Missing App configuration fails explicitly. The protected default
-branch is the only source of executable sync code; proposed changes remain Git
-objects until separately reviewed.
+repository; the official token action revokes it after the job. The key can mint
+PR access to both repositories, so it is a cross-repository credential. It never
+approves or merges PRs. Missing App configuration fails explicitly. The protected
+default branch is the only source of executable sync code. Proposed fork changes
+run under GitHub's normal fork CI restrictions and still require review.
 
 Enable normal CI in the fork, retaining contributor-run approvals.
 The release-candidate, Store-package and APT/Pages workflows are restricted to

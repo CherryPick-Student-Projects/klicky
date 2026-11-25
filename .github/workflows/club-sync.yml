@@ -40,9 +40,7 @@ jobs:
           private-key: ${{ secrets.CLUB_SYNC_PRIVATE_KEY }}
           owner: ${{ matrix.owner }}
           repositories: klicky
-          permission-contents: write
           permission-pull-requests: write
-          permission-workflows: write
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -52,5 +50,4 @@ jobs:
           GH_TOKEN: ${{ steps.sync-token.outputs.token }}
           SYNC_REPOSITORY: ${{ matrix.owner }}/klicky
         run: |
-          gh auth setup-git --hostname github.com
           python3 scripts/sync-club.py --repository "$SYNC_REPOSITORY"

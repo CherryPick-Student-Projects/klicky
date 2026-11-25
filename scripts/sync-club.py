@@ -10,8 +10,8 @@ from urllib.parse import urlencode
 
 
 REPOSITORIES = {
-    "Muneer320/klicky": ("CherryPick-Student-Projects/klicky", "codex/sync-cherrypick"),
-    "CherryPick-Student-Projects/klicky": ("Muneer320/klicky", "codex/sync-upstream"),
+    "Muneer320/klicky": "CherryPick-Student-Projects/klicky",
+    "CherryPick-Student-Projects/klicky": "Muneer320/klicky",
 }
 MARKER = "<!-- klicky-club-sync -->"
 
@@ -32,16 +32,9 @@ def api(path, data=None):
     return json.loads(result.stdout)
 
 
-def ancestor(old, new):
-    result = subprocess.run(["git", "merge-base", "--is-ancestor", old, new], check=False)
-    if result.returncode not in (0, 1):
-        raise RuntimeError("Cannot verify sync branch ancestry.")
-    return result.returncode == 0
-
-
 def sync(repository, dry_run=False):
-    source, branch = REPOSITORIES[repository]
-    owner = repository.split("/")[0]
+    source = REPOSITORIES[repository]
+    source_owner = source.split("/")[0]
     if command("git", "rev-parse", "--is-shallow-repository") == "true":
         raise RuntimeError("Full Git history is required; use checkout fetch-depth: 0.")
     # Explicit refspecs never fetch tags or modify a default branch. Incoming
@@ -56,38 +49,27 @@ def sync(repository, dry_run=False):
         "git", "rev-parse", f"{head}^{{tree}}"
     )
 
-    query = urlencode({"state": "all", "base": "master", "head": f"{owner}:{branch}",
+    query = urlencode({"state": "all", "base": "master", "head": f"{source_owner}:master",
                        "per_page": 100, "sort": "created", "direction": "desc"})
-    pulls = api(f"repos/{repository}/pulls?{query}")
+    pulls = [pr for pr in api(f"repos/{repository}/pulls?{query}")
+             if pr["head"]["repo"] and pr["head"]["repo"]["full_name"] == source]
     opened = [pr for pr in pulls if pr["state"] == "open"]
-    if len(opened) > 1 or any(MARKER not in (pr.get("body") or "") for pr in opened):
-        raise RuntimeError("Reserved sync branch has an unexpected PR; inspect it manually.")
-    if not incoming and not opened:
+    if opened:
+        # The head stays in its original repository. GitHub updates the diff as
+        # master advances, including reversions; never promote fork workflows to
+        # a trusted local branch before their review.
+        print(f"Existing cross-repository sync PR follows source master: {opened[0]['html_url']}")
+        return
+    if not incoming:
         print("No incoming file changes; no sync PR needed.")
         return
-    if not opened and pulls and not pulls[0].get("merged_at") and pulls[0]["head"]["sha"] == head:
+    if pulls and not pulls[0].get("merged_at") and pulls[0]["head"]["sha"] == head:
         print("This revision's sync PR was closed without merging; leaving it closed.")
         return
-
-    remote_url = f"https://github.com/{repository}.git"
-    ref = f"refs/heads/{branch}"
-    existing = command("git", "ls-remote", "--heads", remote_url, ref)
-    if existing:
-        command("git", "fetch", "--no-tags", remote_url,
-                f"+{ref}:refs/klicky-sync/previous")
-        if not ancestor("refs/klicky-sync/previous", head):
-            raise RuntimeError("Sync branch diverged or source history was rewritten. "
-                               "Resolve manually; no force push was attempted.")
 
     print(f"Propose {source}@{head} -> {repository}:master ({ahead} incoming commits).")
     if dry_run:
         print("Dry run: no remote branch or PR changed.")
-        return
-    # Ordinary push rejects non-fast-forward races. Never push master, tags,
-    # or force-update an existing branch.
-    command("git", "-c", "core.hooksPath=/dev/null", "push", remote_url, f"{head}:{ref}")
-    if opened:
-        print(f"Existing sync PR refreshed: {opened[0]['html_url']}")
         return
     body = (
         f"{MARKER}\n"
@@ -95,14 +77,15 @@ def sync(repository, dry_run=False):
         f"into `{repository}:master`.\n\n"
         "Review the diff, CI and the source PRs before merging. Use **Create a merge commit** "
         "to preserve shared history; do not squash or rebase this integration PR. "
-        "Resolve conflicts on the source side or through a separately reviewed integration branch.\n\n"
+        "Resolve conflicts on the source side or through a separately reviewed integration branch. "
+        "The head remains in the source repository to preserve GitHub's fork trust boundary.\n\n"
         "This PR does not merge itself, close upstream issues, publish releases or deploy the site. "
         "Reference the original issues when their fixes are accepted upstream.\n\n"
         "[Shared contribution board](https://github.com/users/Muneer320/projects/1)"
     )
     pr = api(f"repos/{repository}/pulls", {
         "title": f"chore: sync changes from {source.split('/')[0]}",
-        "head": branch, "base": "master", "body": body,
+        "head": f"{source_owner}:master", "head_repo": "klicky", "base": "master", "body": body,
     })
     print(f"Created sync PR: {pr['html_url']}")
 
